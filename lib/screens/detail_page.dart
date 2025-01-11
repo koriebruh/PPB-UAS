@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:image_picker/image_picker.dart';
 
 class DetailPage extends StatefulWidget {
   final String? kota_asal;
@@ -31,6 +32,8 @@ class _DetailPageState extends State<DetailPage> {
   List listData = [];
   var strKey = "e5effe93f8bdd6e8e8f09d1d4a1a42c6";
   bool isLoading = false;
+  final ImagePicker _picker = ImagePicker();
+  XFile? _buktiTransferFile;
 
   final List<Map<String, dynamic>> staticData = [
     {
@@ -110,7 +113,7 @@ class _DetailPageState extends State<DetailPage> {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        await generatePDF(responseData);
+        _showPaymentDialog(responseData);
       } else {
         throw Exception('Gagal menambahkan biaya pengiriman');
       }
@@ -194,6 +197,89 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
+  // Fungsi untuk memilih gambar bukti transfer
+  Future<void> _pickBuktiTransfer() async {
+    // Mengambil foto bukti transfer dari kamera atau galeri
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);  // Atau bisa ImageSource.camera untuk langsung mengambil foto
+    if (pickedFile != null) {
+      setState(() {
+        _buktiTransferFile = pickedFile;
+      });
+
+      // Menampilkan foto bukti transfer langsung setelah dipilih
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Foto bukti transfer berhasil dipilih')),
+      );
+    }
+  }
+
+  void _showPaymentDialog(Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Total Pembayaran: Rp ${data['total']}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Silakan upload bukti transfer Anda'),
+              // Tombol untuk memilih gambar bukti transfer
+              ElevatedButton(
+                onPressed: _pickBuktiTransfer,
+                child: Text('Pilih Foto Bukti Transfer'),
+              ),
+              if (_buktiTransferFile != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Image.file(
+                    File(_buktiTransferFile!.path),
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                // Cek jika foto telah di-upload
+                if (_buktiTransferFile != null) {
+                  // Simpan gambar bukti transfer
+                  final directory = await getApplicationDocumentsDirectory();
+                  final file = File('${directory.path}/bukti_transfer_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                  await file.writeAsBytes(await _buktiTransferFile!.readAsBytes());
+
+                  // Menampilkan tombol untuk membuka PDF
+                  setState(() {
+                    // Memperbarui UI untuk menampilkan tombol "Buka PDF"
+                  });
+
+                  // Membuat PDF bukti pembayaran setelah upload
+                  generatePDF(data);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Bukti transfer berhasil di-upload!')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Pilih foto bukti transfer terlebih dahulu')),
+                  );
+                }
+              },
+              child: Text('Cetak Bukti Pembayaran'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Batal dan tutup dialog
+              },
+              child: Text('Batal'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -263,6 +349,18 @@ class _DetailPageState extends State<DetailPage> {
                   ),
                 );
               },
+            ),
+            // Tombol Kembali ke Dashboard
+            SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  // Navigasi ke halaman dashboard (menggunakan pop atau pushNamed)
+                  Navigator.pushReplacementNamed(context, '/dashboard');
+                },
+                child: const Text('Kembali ke Dashboard'),
+              ),
             ),
           ],
         ),
