@@ -1,138 +1,272 @@
-import 'dart:convert';      
-import 'package:flutter/material.dart';      
-import 'package:http/http.dart' as http;      
-import 'payment_page.dart'; // Ensure you have the payment page imported    
-    
-class DetailPage extends StatefulWidget {      
-  final String? kota_asal;      
-  final String? kota_tujuan;      
-  final String? berat;      
-  final String? kurir;      
-  final int userId; // Add userId to the constructor    
-      
-  const DetailPage({super.key, this.kota_asal, this.kota_tujuan, this.berat, this.kurir, required this.userId});      
-      
-  @override      
-  State<DetailPage> createState() => _DetailPageState();      
-}      
-      
-class _DetailPageState extends State<DetailPage> {      
-  List listData = [];      
-  var strKey = "e5effe93f8bdd6e8e8f09d1d4a1a42c6";      
-      
-  final List<Map<String, dynamic>> staticData = [      
-    {      
-      "service": "JNE Reguler",      
-      "description": "Pengiriman Reguler",      
-      "cost": [{"value": 10000, "etd": "3-5"}],      
-    },      
-    {      
-      "service": "JNE Express",      
-      "description": "Pengiriman Ekspres",      
-      "cost": [{"value": 20000, "etd": "1-2"}],      
-    },      
-  ];      
-      
-  @override      
-  void initState() {      
-    super.initState();      
-    getData();      
-  }      
-      
-  Future<void> getData() async {      
-    try {      
-      final response = await http.post(      
-        Uri.parse("https://api.rajaongkir.com/starter/cost"),      
-        body: {      
-          "key": strKey,      
-          "origin": widget.kota_asal,      
-          "destination": widget.kota_tujuan,      
-          "weight": widget.berat,      
-          "courier": widget.kurir      
-        },      
-      );      
-      
-      if (response.statusCode == 200) {      
-        var data = jsonDecode(response.body);      
-        setState(() {      
-          listData = data['rajaongkir']['results'][0]['costs'];      
-        });      
-      } else {      
-        throw Exception('Gagal memuat data: ${response.statusCode}');      
-      }      
-    } catch (e) {      
-      print(e);      
-      setState(() {      
-        listData = staticData;      
-      });      
-    }      
-  }      
-      
-  @override      
-  Widget build(BuildContext context) {      
-    return Scaffold(      
-      appBar: AppBar(      
-        title: Text("Detail Ongkos Kirim ${widget.kurir.toString().toUpperCase()}"),      
-      ),      
-      body: SingleChildScrollView(      
-        child: ListView.builder(      
-          itemCount: listData.length,      
-          shrinkWrap: true,      
-          physics: NeverScrollableScrollPhysics(),      
-          itemBuilder: (_, index) {      
-            return Card(      
-              margin: const EdgeInsets.all(10),      
-              clipBehavior: Clip.antiAlias,      
-              elevation: 5,      
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),      
-              color: Colors.white,      
-              child: ListTile(      
-                title: Text("${listData[index]['service']}"),      
-                subtitle: Text("${listData[index]['description']}"),      
-                trailing: Column(      
-                  crossAxisAlignment: CrossAxisAlignment.end,      
-                  children: [      
-                    const SizedBox(height: 5),      
-                    Text(      
-                      "Rp ${listData[index]['cost'][0]['value']}",      
-                      style: const TextStyle(fontSize: 20, color: Colors.red),      
-                    ),      
-                    const SizedBox(height: 3),      
-                    Text("${listData[index]['cost'][0]['etd']} Days"),      
-                    const SizedBox(height: 5),      
-                    ElevatedButton(      
-                      onPressed: () {      
-                        double totalShippingCost = double.parse(listData[index]['cost'][0]['value'].toString());      
-                        double? totalPrice = double.tryParse(widget.berat ?? '0');      
-      
-                        if (totalPrice == null) {      
-                          ScaffoldMessenger.of(context).showSnackBar(      
-                            const SnackBar(content: Text('Berat tidak valid')),      
-                          );      
-                          return;      
-                        }      
-      
-                        double totalPayment = totalPrice + totalShippingCost;      
-      
-                        Navigator.push(      
-                          context,      
-                          MaterialPageRoute(      
-                            builder: (context) => PaymentPage(      
-                              totalPrice: totalPayment,      
-                              shippingCost: totalShippingCost,      
-                            ),      
-                          ),      
-                        );      
-                      },      
-                      child: const Text('Bayar'),      
-                    ),      
-                  ],      
-                ),      
-              ),      
-            );      
-          },      
-        ),      
-      ),      
-    );      
-  }      
-}    
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+
+class DetailPage extends StatefulWidget {
+  final String? kota_asal;
+  final String? kota_tujuan;
+  final String? berat;
+  final String? kurir;
+  final int userId;
+
+  const DetailPage({
+    super.key,
+    this.kota_asal,
+    this.kota_tujuan,
+    this.berat,
+    this.kurir,
+    required this.userId
+  });
+
+  @override
+  State<DetailPage> createState() => _DetailPageState();
+}
+
+class _DetailPageState extends State<DetailPage> {
+  List listData = [];
+  var strKey = "e5effe93f8bdd6e8e8f09d1d4a1a42c6";
+  bool isLoading = false;
+
+  final List<Map<String, dynamic>> staticData = [
+    {
+      "service": "TIKI Regular",
+      "description": "Pengiriman Regular",
+      "cost": [{"value": 10000, "etd": "3-5"}],
+    },
+    {
+      "service": "TIKI Express",
+      "description": "Pengiriman Express",
+      "cost": [{"value": 20000, "etd": "1-2"}],
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    getData();
+  }
+
+  Future<void> getData() async {
+    setState(() {
+      isLoading = true;
+    });
+    try {
+      final response = await http.post(
+        Uri.parse("https://api.rajaongkir.com/starter/cost"),
+        body: {
+          "key": strKey,
+          "origin": widget.kota_asal,
+          "destination": widget.kota_tujuan,
+          "weight": widget.berat,
+          "courier": widget.kurir?.toLowerCase()
+        },
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        setState(() {
+          listData = data['rajaongkir']['results'][0]['costs'];
+        });
+      } else {
+        throw Exception('Gagal memuat data: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error: $e');
+      setState(() {
+        listData = staticData;
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> addShipping(double shippingCost) async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://api-ppb.vercel.app/api/carts/add-shipping'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'user_id': widget.userId,
+          'kota_asal': widget.kota_asal,
+          'kota_tujuan': widget.kota_tujuan,
+          'biaya_ongkir': shippingCost,
+          'weight': double.parse(widget.berat ?? '0'),
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        await generatePDF(responseData);
+      } else {
+        throw Exception('Gagal menambahkan biaya pengiriman');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> generatePDF(Map<String, dynamic> data) async {
+    final doc = pw.Document();
+
+    try {
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'BUKTI PEMBAYARAN',
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                ...data['items'].map<pw.Widget>((item) {
+                  return pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Produk: ${item['product_name']}'),
+                      pw.Text('Harga: Rp ${item['price']}'),
+                      pw.Text('Jumlah: ${item['quantity']}'),
+                      pw.Text('Subtotal: Rp ${item['subtotal']}'),
+                      pw.SizedBox(height: 10),
+                    ],
+                  );
+                }).toList(),
+                pw.Divider(),
+                pw.Text('Detail Pengiriman:'),
+                pw.Text('Dari: ${data['shipping']['city_from']}'),
+                pw.Text('Ke: ${data['shipping']['city_to']}'),
+                pw.Text('Berat: ${data['shipping']['weight']} kg'),
+                pw.Text('Biaya Pengiriman: Rp ${data['shipping']['shipping_cost']}'),
+                pw.Divider(),
+                pw.Text(
+                  'Total Pembayaran: Rp ${data['total']}',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      // Dapatkan directory temporary
+      final output = await getTemporaryDirectory();
+      final file = File('${output.path}/bukti_pembayaran.pdf');
+
+      // Simpan PDF ke file
+      await file.writeAsBytes(await doc.save());
+
+      // Buka file PDF
+      OpenFile.open(file.path);
+
+    } catch (e) {
+      print('Error generating PDF: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal membuat PDF: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Detail Ongkos Kirim ${widget.kurir?.toUpperCase() ?? ''}"),
+      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: listData.length,
+              itemBuilder: (context, index) {
+                final item = listData[index];
+                final cost = item['cost'][0];
+
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              item['service'] ?? '',
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold
+                              ),
+                            ),
+                            Text(
+                              'Rp ${cost['value']}',
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(item['description'] ?? ''),
+                            Text('${cost['etd']} Hari'),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              double shippingCost = double.parse(cost['value'].toString());
+                              addShipping(shippingCost);
+                            },
+                            child: const Text('Pilih'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
