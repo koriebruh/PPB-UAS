@@ -214,71 +214,127 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   void _showPaymentDialog(Map<String, dynamic> data) {
+    // Fungsi untuk memeriksa apakah foto sudah di-upload
+    bool isPhotoUploaded() {
+      return _buktiTransferFile != null;
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Total Pembayaran: Rp ${data['total']}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Silakan upload bukti transfer Anda'),
-              // Tombol untuk memilih gambar bukti transfer
-              ElevatedButton(
-                onPressed: _pickBuktiTransfer,
-                child: Text('Pilih Foto Bukti Transfer'),
-              ),
-              if (_buktiTransferFile != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Image.file(
-                    File(_buktiTransferFile!.path),
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Total Pembayaran: Rp ${data['total']}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Silakan upload bukti transfer Anda'),
+                  // Tombol untuk memilih gambar bukti transfer
+                  ElevatedButton(
+                    onPressed: _pickBuktiTransfer,
+                    child: Text('Pilih Foto Bukti Transfer'),
                   ),
+                  if (_buktiTransferFile != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Image.file(
+                        File(_buktiTransferFile!.path),
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                // Tombol "Upload Bukti Transfer"
+                TextButton(
+                  onPressed: () async {
+                    // Cek jika foto telah di-upload
+                    if (_buktiTransferFile != null) {
+                      // Simpan gambar bukti transfer
+                      final directory = await getApplicationDocumentsDirectory();
+                      final file = File('${directory.path}/bukti_transfer_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                      await file.writeAsBytes(await _buktiTransferFile!.readAsBytes());
+
+                      // Memperbarui UI setelah upload
+                      setState(() {}); // Ini untuk memastikan UI ter-refresh
+
+                      // Membuat PDF bukti pembayaran setelah upload
+                      generatePDF(data);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Bukti transfer berhasil di-upload!')),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Pilih foto bukti transfer terlebih dahulu')),
+                      );
+                    }
+                  },
+                  child: Text('Upload Bukti Transfer'),
                 ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                // Cek jika foto telah di-upload
-                if (_buktiTransferFile != null) {
-                  // Simpan gambar bukti transfer
-                  final directory = await getApplicationDocumentsDirectory();
-                  final file = File('${directory.path}/bukti_transfer_${DateTime.now().millisecondsSinceEpoch}.jpg');
-                  await file.writeAsBytes(await _buktiTransferFile!.readAsBytes());
-
-                  // Menampilkan tombol untuk membuka PDF
-                  setState(() {
-                    // Memperbarui UI untuk menampilkan tombol "Buka PDF"
-                  });
-
-                  // Membuat PDF bukti pembayaran setelah upload
-                  generatePDF(data);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Bukti transfer berhasil di-upload!')),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Pilih foto bukti transfer terlebih dahulu')),
-                  );
-                }
-              },
-              child: Text('Cetak Bukti Pembayaran'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Batal dan tutup dialog
-              },
-              child: Text('Batal'),
-            ),
-          ],
+                // Tombol "Selesai" hanya muncul setelah foto bukti transfer di-upload
+                if (isPhotoUploaded())
+                  TextButton(
+                    onPressed: () async {
+                      // Lakukan POST ke API checkout dan tunggu hasilnya
+                      bool success = await completeCheckout();
+                      if (success) {
+                        Navigator.pop(context);  // Menutup dialog setelah checkout berhasil
+                        Navigator.pushReplacementNamed(context, '/dashboard');  // Navigasi ke /dashboard
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Gagal menyelesaikan checkout')),
+                        );
+                      }
+                    },
+                    child: Text('Selesai'),
+                  ),
+                // Tombol "Batal"
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Batal dan tutup dialog
+                  },
+                  child: Text('Batal'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
+
+// Fungsi untuk memanggil API checkout
+  Future<bool> completeCheckout() async {
+    try {
+      final response = await http.post(
+        Uri.parse("https://api-ppb.vercel.app/api/carts/checkout"),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'user_id': widget.userId,
+          'is_paid': true,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // Jika berhasil
+        return true;
+      } else {
+        throw Exception('Gagal menyelesaikan checkout');
+      }
+    } catch (e) {
+      print('Error: $e');
+      return false;
+    }
+  }
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -349,18 +405,6 @@ class _DetailPageState extends State<DetailPage> {
                   ),
                 );
               },
-            ),
-            // Tombol Kembali ke Dashboard
-            SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Navigasi ke halaman dashboard (menggunakan pop atau pushNamed)
-                  Navigator.pushReplacementNamed(context, '/dashboard');
-                },
-                child: const Text('Kembali ke Dashboard'),
-              ),
             ),
           ],
         ),
