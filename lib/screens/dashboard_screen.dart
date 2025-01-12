@@ -171,15 +171,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             );  
           }  
         },  
-      ),  
-      floatingActionButton: _role == 'admin' // Show button only for admin  
-          ? FloatingActionButton(  
-              onPressed: () {  
-                Navigator.pushNamed(context, '/adminProducts');  
-              },  
-              child: const Icon(Icons.add),  
-            )  
-          : null,  
+      ),
+      floatingActionButton: _role == 'admin' // Show button only for admin
+          ? Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/adminPanel'); // Navigasi ke adminPanel
+            },
+            child: const Icon(Icons.admin_panel_settings),
+            heroTag: "adminPanelButton",
+          ),
+          const SizedBox(height: 10), // Jarak antara tombol
+          FloatingActionButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/adminProducts'); // Navigasi ke adminProducts
+            },
+            child: const Icon(Icons.add),
+            heroTag: "adminProductsButton",
+          ),
+        ],
+      )
+          : null,
       bottomNavigationBar: BottomAppBar(  
         child: Row(  
           mainAxisAlignment: MainAxisAlignment.spaceAround,  
