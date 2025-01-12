@@ -102,6 +102,32 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
     }
   }
 
+  void showDeleteConfirmation(User user) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete User'),
+        content: Text('Are you sure you want to delete ${user.user}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              deleteUser(user.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> updateUser(User user) async {
     final response = await http.put(
       Uri.parse('https://api-ppb.vercel.app/api/users/${user.id}'),
@@ -125,7 +151,85 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
     }
   }
 
+  void showEditUserDialog(User user) {
+    userController.text = user.user;
+    usernameController.text = user.username;
+    passwordController.text = user.password;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit User'),
+        content: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: userController,
+                decoration: InputDecoration(labelText: 'Name'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a name';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: usernameController,
+                decoration: InputDecoration(labelText: 'Username'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a username';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: passwordController,
+                decoration: InputDecoration(labelText: 'Password'),
+                obscureText: true,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a password';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (_formKey.currentState!.validate()) {
+                User updatedUser = User(
+                  id: user.id,
+                  user: userController.text,
+                  username: usernameController.text,
+                  password: passwordController.text,
+                  role: user.role,
+                );
+                updateUser(updatedUser);
+                Navigator.pop(context);
+              }
+            },
+            child: Text('Update User'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void showAddUserDialog() {
+    userController.clear();
+    usernameController.clear();
+    passwordController.clear();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -201,10 +305,10 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
                   'User Management',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                ElevatedButton.icon(
+                TextButton.icon(
                   onPressed: showAddUserDialog,
-                  icon: Icon(Icons.add),
-                  label: Text('Add User'),
+                  icon: const Icon(Icons.add, color: Colors.purple),
+                  label: const Text('Add User', style: TextStyle(color: Colors.purple)),
                 ),
               ],
             ),
@@ -212,31 +316,41 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                columns: [
+                columns: const [
                   DataColumn(label: Text('Name')),
                   DataColumn(label: Text('Username')),
                   DataColumn(label: Text('Role')),
-                  DataColumn(label: Text('Actions')),
+                  DataColumn(label: Text('Actions', style: TextStyle(color: Colors.blue))),
                 ],
+                columnSpacing: 20,
+                horizontalMargin: 12,
                 rows: users.map((user) => DataRow(
                   cells: [
                     DataCell(Text(user.user)),
                     DataCell(Text(user.username)),
                     DataCell(Text(user.role.isEmpty ? 'consumer' : user.role)),
-                    DataCell(Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.edit),
-                          onPressed: () {
-                            // Implement edit functionality
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.delete),
-                          onPressed: () => deleteUser(user.id),
-                        ),
-                      ],
-                    )),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            onPressed: () => showEditUserDialog(user),
+                            color: Colors.blue,
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(8),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.delete, size: 20),
+                            onPressed: () => showDeleteConfirmation(user),
+                            color: Colors.red,
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(8),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 )).toList(),
               ),
