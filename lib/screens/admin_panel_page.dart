@@ -13,6 +13,8 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
   List<User> users = [];
   List<SalesHistory> salesHistory = [];
   final _formKey = GlobalKey<FormState>();
+  DateTime? startDate;
+  DateTime? endDate;
 
   TextEditingController userController = TextEditingController();
   TextEditingController usernameController = TextEditingController();
@@ -22,7 +24,7 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
   void initState() {
     super.initState();
     fetchUsers();
-    fetchSalesHistory();
+    // fetchSalesHistory();
   }
 
   Future<void> fetchUsers() async {
@@ -43,21 +45,43 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
   }
 
   Future<void> fetchSalesHistory() async {
-    final response = await http.get(
-      Uri.parse('https://api-ppb.vercel.app/api/carts/history'),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    );
+    // Clear existing data before fetching new data
+    setState(() {
+      salesHistory = [];
+    });
 
-    if (response.statusCode == 200) {
-      List<dynamic> data = json.decode(response.body);
+    if (startDate == null || endDate == null) {
+      return;
+    }
+
+    String formattedStartDate = DateFormat('yyyy-MM-dd').format(startDate!);
+    String formattedEndDate = DateFormat('yyyy-MM-dd').format(endDate!);
+    try {
+      final response = await http.post(
+        Uri.parse("https://api-ppb.vercel.app/api/carts/history"),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'start_date': formattedStartDate,
+          'end_date': formattedEndDate,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        List<dynamic> data = json.decode(response.body);
+        setState(() {
+          salesHistory = data.isEmpty ? [] : data.map((json) => SalesHistory.fromJson(json)).toList();
+        });
+      }
+    } catch (e) {
       setState(() {
-        salesHistory = data.map((json) => SalesHistory.fromJson(json)).toList();
+        salesHistory = [];
       });
     }
   }
+
 
   Future<void> deleteUser(int id) async {
     final response = await http.delete(
@@ -148,6 +172,37 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('User updated successfully')),
       );
+    }
+  }
+
+  Future<void> _selectDateRange() async {
+    // Clear existing data first
+    setState(() {
+      salesHistory = [];
+    });
+
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2027),
+      initialDateRange: startDate != null && endDate != null
+          ? DateTimeRange(start: startDate!, end: endDate!)
+          : null,
+    );
+
+    if (picked != null) {
+      setState(() {
+        startDate = picked.start;
+        endDate = picked.end;
+      });
+      fetchSalesHistory();
+    } else {
+      // If user cancels the date picker, clear the dates and data
+      setState(() {
+        startDate = null;
+        endDate = null;
+        salesHistory = [];
+      });
     }
   }
 
@@ -359,6 +414,24 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
             Text(
               'Sales History',
               style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (startDate != null && endDate != null)
+                  Text(
+                    'Filter: ${DateFormat('dd/MM/yyyy').format(startDate!)} - ${DateFormat('dd/MM/yyyy').format(endDate!)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                TextButton.icon(
+                  onPressed: _selectDateRange,
+                  icon: const Icon(Icons.calendar_today, color: Colors.purple),
+                  label: const Text(
+                    'Select Date Range',
+                    style: TextStyle(color: Colors.purple),
+                  ),
+                ),
+              ],
             ),
             SizedBox(height: 16),
             SingleChildScrollView(
