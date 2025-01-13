@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uas_ppb/screens/admin_panel_page.dart';
+import 'package:uas_ppb/screens/purchase_history_page.dart';
 import 'package:uas_ppb/utils/product_provider.dart';  
 import 'screens/login_screen.dart';  
 import 'screens/dashboard_screen.dart';  
@@ -55,6 +56,7 @@ class MyApp extends StatelessWidget {
         '/history': (context) => const HistoryScreen(),  
         '/adminProducts': (context) => const AdminProductScreen(),  
         '/adminPanel': (context) => AdminPanelPage(),
+        '/purchaseHistory': (context) => const PurchaseHistoryScreen(),
       },
     );  
   }  

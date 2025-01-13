@@ -112,6 +112,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () {
+              Navigator.pushNamed(context, '/purchaseHistory');
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _navigateToUpdateUser, // Navigasi ke halaman update pengguna
           ),
