@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'dart:io';
 
 class AdminPanelPage extends StatefulWidget {
   @override
@@ -44,6 +49,47 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
     }
   }
 
+  Future<void> generateAndOpenPDF() async {
+    if (salesHistory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No data available to export')),
+      );
+      return;
+    }
+
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Header(
+            level: 0,
+            child: pw.Text('Sales History Report', style: pw.TextStyle(fontSize: 20)),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text('Period: ${startDate != null ? DateFormat('dd/MM/yyyy').format(startDate!) : 'N/A'} - ${endDate != null ? DateFormat('dd/MM/yyyy').format(endDate!) : 'N/A'}'),
+          pw.SizedBox(height: 20),
+          pw.Table.fromTextArray(
+            headers: ['Product', 'Quantity', 'Price', 'Subtotal', 'Date'],
+            data: salesHistory.map((sale) => [
+              sale.name,
+              sale.jumlah.toString(),
+              NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(sale.price),
+              NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(sale.subtotal),
+              DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(sale.buyTime)),
+            ]).toList(),
+          ),
+        ],
+      ),
+    );
+
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/sales_history_report.pdf');
+    await file.writeAsBytes(await pdf.save());
+
+    await OpenFile.open(file.path);
+  }
+
   Future<void> fetchSalesHistory() async {
     // Clear existing data before fetching new data
     setState(() {
@@ -81,7 +127,6 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
       });
     }
   }
-
 
   Future<void> deleteUser(int id) async {
     final response = await http.delete(
@@ -419,17 +464,32 @@ class _AdminPanelPageState extends State<AdminPanelPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 if (startDate != null && endDate != null)
-                  Text(
-                    'Filter: ${DateFormat('dd/MM/yyyy').format(startDate!)} - ${DateFormat('dd/MM/yyyy').format(endDate!)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  Expanded(
+                    child: Text(
+                      'Filter: ${DateFormat('dd/MM/yyyy').format(startDate!)} - ${DateFormat('dd/MM/yyyy').format(endDate!)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ),
-                TextButton.icon(
-                  onPressed: _selectDateRange,
-                  icon: const Icon(Icons.calendar_today, color: Colors.purple),
-                  label: const Text(
-                    'Select Date Range',
-                    style: TextStyle(color: Colors.purple),
-                  ),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: _selectDateRange,
+                      icon: const Icon(Icons.calendar_today, color: Colors.purple),
+                      label: const Text(
+                        'Select Date Range',
+                        style: TextStyle(color: Colors.purple),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: generateAndOpenPDF,
+                      icon: const Icon(Icons.download, color: Colors.green),
+                      label: const Text(
+                        'Download PDF',
+                        style: TextStyle(color: Colors.green),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
